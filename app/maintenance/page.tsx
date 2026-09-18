@@ -57,7 +57,7 @@ export default function MaintenancePage() {
           style={{ animation: "fadeUp 0.5s ease 0.35s both" }}
         >
           <p className="text-gray-500 text-base sm:text-lg leading-relaxed">
-            موقع مسار الجوال يخضع حاليًا لبعض أعمال الصيانة والتحديث.
+            موقع لمسه  يخضع حاليًا لبعض أعمال الصيانة والتحديث.
           </p>
           <p className="text-gray-500 text-base sm:text-lg leading-relaxed">
             نعود إليكم قريبًا بخدمات أفضل وتجربة أسرع وأسهل.
