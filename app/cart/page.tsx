@@ -6,6 +6,7 @@ import Link from "next/link";
 import { ShoppingBag, ChevronRight, Home, Truck, Lock, MessageCircle, BadgeCheck, ShieldCheck, Zap, Package, User, Phone, MapPin, IdCard, ArrowLeft, CheckCircle2 } from "lucide-react";
 import { useCartStore } from "../store/cartStore";
 import type { CustomerInfo } from "../store/cartStore";
+import { useAuthStore } from "../store/authStore";
 import CartItem from "./components/CartItem";
 import AnimatedBackground from "../components/AnimatedBackground";
 
@@ -14,6 +15,7 @@ const fmt = (n: number) => n.toLocaleString("en-US");
 export default function CartPage() {
   const router = useRouter();
   const { items, removeItem, updateQty, totalPrice, totalItems, setCustomer, clear } = useCartStore();
+  const { user, initialized } = useAuthStore();
   const mounted = useSyncExternalStore(() => () => {}, () => true, () => false);
   const scrolled = useRef(false);
 
@@ -278,6 +280,36 @@ export default function CartPage() {
                 <OrderSummaryMobile items={items} total={total} />
               </div>
             </section>
+
+            {/* Guest Notice */}
+            {initialized && !user && (
+              <div className="border border-[#C8A375]/50 bg-[#fdf8f2] px-4 py-3.5" dir="rtl">
+                <div className="flex gap-3 items-start">
+                  <span className="text-[#B5854A] mt-0.5 shrink-0"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span>
+                  <div className="space-y-2.5 flex-1">
+                    <p className="text-xs text-[#0A1C29]/70 leading-relaxed">
+                      لتتمكن من متابعة طلبك وتفاصيله بسهولة بعد إتمام الدفع، ننصحك بتسجيل الدخول أو إنشاء حساب — وهو اختياري تمامًا.
+                    </p>
+                    <div className="flex gap-2 flex-wrap">
+                      <Link
+                        href="/auth?redirect=/cart"
+                        className="text-xs font-bold text-[#0A1C29] border border-[#0A1C29]/30 px-3 py-1.5 hover:border-[#0A1C29] transition-colors"
+                        style={{ borderRadius: 0 }}
+                      >
+                        تسجيل الدخول
+                      </Link>
+                      <Link
+                        href="/auth?tab=register&redirect=/cart"
+                        className="text-xs font-bold text-[#B5854A] border border-[#B5854A]/40 px-3 py-1.5 hover:border-[#B5854A] transition-colors"
+                        style={{ borderRadius: 0 }}
+                      >
+                        إنشاء حساب
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* CTA Button */}
             <button

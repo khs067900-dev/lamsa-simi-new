@@ -1,6 +1,5 @@
 "use client";
 
-import { User } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import PhoneInput, { isValidPhoneNumber, getCountries, getCountryCallingCode } from "react-phone-number-input";
 import type { Value as PhoneValue, Country } from "react-phone-number-input";
@@ -19,6 +18,8 @@ interface CustomerSectionProps {
   data: CustomerData;
   errors: Record<string, string>;
   confirmed: boolean;
+  isAuthenticated: boolean;
+  authLoading: boolean;
   onChange: (field: keyof CustomerData, value: string) => void;
   onConfirm: () => void;
   onEdit: () => void;
@@ -124,95 +125,149 @@ function CustomCountrySelect({ value, onChange }: {
   );
 }
 
-export default function CustomerSection({ data, errors, confirmed, onChange, onConfirm, onEdit }: CustomerSectionProps) {
-  const hasName = data.firstName.trim();
+export default function CustomerSection({ data, errors, confirmed, isAuthenticated, authLoading, onChange, onConfirm, onEdit }: CustomerSectionProps) {
   const [phoneErr, setPhoneErr] = useState("");
   const displayPhoneErr = phoneErr || errors.phone || "";
 
-  if (confirmed) {
+  // ── Skeleton أثناء تحميل auth state ──────────────────────────────────────
+  if (authLoading) {
+    return (
+      <div className="px-4 sm:px-6 py-5 space-y-3 animate-pulse">
+        <div className="h-4 w-32 bg-gray-100 rounded" />
+        <div className="h-3 w-48 bg-gray-100 rounded" />
+        <div className="h-3 w-40 bg-gray-100 rounded" />
+      </div>
+    );
+  }
+
+  // ── المستخدم المسجل — عرض ملخص ───────────────────────────────────────────
+  if (isAuthenticated && confirmed) {
+    const fullName = [data.firstName, data.lastName].filter(Boolean).join(" ");
     return (
       <div className="px-4 sm:px-6 py-5 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <User size={20} strokeWidth={1.5} className="text-gray-400 shrink-0 sm:w-6 sm:h-6" />
-          <div>
-            <p className="text-sm font-semibold text-[#1A2E44]">
-              {hasName ? <>حيَّاك، {data.firstName} {data.lastName}</> : "حيَّاك، ضيفنا الكريم"}
-            </p>
-            <p className="text-xs text-gray-400 font-mono" dir="ltr">{data.phone}</p>
-          </div>
+        <p className="text-sm font-semibold text-[#1A2E44]">
+          {fullName ? `حيّاك، ${fullName}` : "حيّاك"}
+        </p>
+        <button
+          onClick={onEdit}
+          className="text-xs font-medium text-gray-400 hover:text-[#1A2E44] transition shrink-0"
+        >
+          تعديل
+        </button>
+      </div>
+    );
+  }
+
+  // ── الضيف — confirmed ─────────────────────────────────────────────────────
+  if (!isAuthenticated && confirmed) {
+    return (
+      <div className="px-4 sm:px-6 py-5 flex items-center justify-between">
+        <div>
+          <p className="text-sm font-semibold text-[#1A2E44]">
+            {data.firstName ? `${data.firstName} ${data.lastName}`.trim() : "ضيف"}
+          </p>
+          <p className="text-xs text-gray-400 font-mono" dir="ltr">{data.phone}</p>
         </div>
         <button onClick={onEdit} className="text-xs font-medium text-gray-400 hover:text-[#1A2E44] transition">تعديل</button>
       </div>
     );
   }
 
+  // ── فورم التعديل / الإدخال ────────────────────────────────────────────────
+  const missingPhone = isAuthenticated && !data.phone;
+
   return (
     <div className="px-4 sm:px-6 py-5 space-y-4">
       <div>
         <p className="text-sm font-semibold text-[#1A2E44]">
-          {hasName ? <>حيَّاك، {data.firstName}</> : "حيَّاك، ضيفنا الكريم"}
+          {isAuthenticated
+            ? (data.firstName ? `حيّاك، ${data.firstName}` : "حيّاك")
+            : "بيانات التواصل"}
         </p>
-        {!hasName && <p className="text-xs text-gray-400 mt-0.5">فضلًا أضف بيانات التواصل معك.</p>}
+        <p className="text-xs text-gray-400 mt-0.5">
+          {isAuthenticated
+            ? "يمكنك تعديل بيانات التواصل لهذا الطلب إذا رغبت."
+            : "أدخل بيانات التواصل لإتمام طلبك."}
+        </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <Field
-          label="الاسم الأول"
-          value={data.firstName}
-          error={errors.firstName}
-          placeholder="أدخل اسمك الأول"
-          onChange={v => onChange("firstName", v.replace(/[^a-zA-Z\u0600-\u06FF\s]/g, ""))}
-        />
-        <Field
-          label="الاسم الأخير"
-          value={data.lastName}
-          error={errors.lastName}
-          placeholder="أدخل اسمك الأخير"
-          onChange={v => onChange("lastName", v.replace(/[^a-zA-Z\u0600-\u06FF\s]/g, ""))}
-        />
-      </div>
-
-      <Field
-        label="البريد الإلكتروني (اختياري)"
-        value={data.email}
-        placeholder="example@mail.com"
-        dir="ltr"
-        inputMode="email"
-        onChange={v => onChange("email", v)}
-      />
-
-      <div className="flex flex-col gap-1">
-        <div className="flex items-center justify-between">
-          <label className="text-xs sm:text-sm font-semibold text-gray-600">رقم الجوال</label>
-          {displayPhoneErr && (
-            <span className="flex items-center gap-1 text-[11px] font-medium text-red-500 bg-red-50 border border-red-200 rounded px-1.5 py-0.5">
-              <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
-              {displayPhoneErr}
-            </span>
-          )}
+      {/* للمستخدم المسجل: أظهر كل الحقول للتعديل */}
+      {isAuthenticated && !missingPhone ? (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="الاسم الأول" value={data.firstName} error={errors.firstName}
+              placeholder="أدخل اسمك الأول"
+              onChange={v => onChange("firstName", v.replace(/[^a-zA-Z\u0600-\u06FF\s]/g, ""))} />
+            <Field label="الاسم الأخير" value={data.lastName} error={errors.lastName}
+              placeholder="أدخل اسمك الأخير"
+              onChange={v => onChange("lastName", v.replace(/[^a-zA-Z\u0600-\u06FF\s]/g, ""))} />
+          </div>
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center justify-between">
+              <label className="text-xs sm:text-sm font-semibold text-gray-600">رقم الجوال</label>
+              {displayPhoneErr && <PhoneErrBadge msg={displayPhoneErr} />}
+            </div>
+            <PhoneInput
+              defaultCountry="SA" international countryCallingCodeEditable={false} labels={ar}
+              value={data.phone as PhoneValue}
+              onChange={v => { const val = v ?? ""; onChange("phone", val); if (!val) setPhoneErr("رقم الجوال مطلوب"); else if (!isValidPhoneNumber(val)) setPhoneErr("رقم غير صحيح"); else setPhoneErr(""); }}
+              onBlur={() => { if (!data.phone) setPhoneErr("رقم الجوال مطلوب"); else if (!isValidPhoneNumber(data.phone)) setPhoneErr("رقم غير صحيح"); }}
+              countrySelectComponent={CustomCountrySelect}
+              numberInputProps={{ placeholder: "5XXXXXXXX", inputMode: "numeric" }}
+              className={`custom-phone-input ${displayPhoneErr ? "phone-error" : ""}`}
+            />
+          </div>
+          <Field label="البريد الإلكتروني" value={data.email} placeholder="example@mail.com"
+            dir="ltr" inputMode="email" onChange={v => onChange("email", v)} />
+        </>
+      ) : isAuthenticated && missingPhone ? (
+        // فقط حقل الجوال الناقص
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center justify-between">
+            <label className="text-xs sm:text-sm font-semibold text-gray-600">رقم الجوال</label>
+            {displayPhoneErr && <PhoneErrBadge msg={displayPhoneErr} />}
+          </div>
+          <PhoneInput
+            defaultCountry="SA" international countryCallingCodeEditable={false} labels={ar}
+            value={data.phone as PhoneValue}
+            onChange={v => { const val = v ?? ""; onChange("phone", val); if (!val) setPhoneErr("رقم الجوال مطلوب"); else if (!isValidPhoneNumber(val)) setPhoneErr("رقم غير صحيح"); else setPhoneErr(""); }}
+            onBlur={() => { if (!data.phone) setPhoneErr("رقم الجوال مطلوب"); else if (!isValidPhoneNumber(data.phone)) setPhoneErr("رقم غير صحيح"); }}
+            countrySelectComponent={CustomCountrySelect}
+            numberInputProps={{ placeholder: "5XXXXXXXX", inputMode: "numeric" }}
+            className={`custom-phone-input ${displayPhoneErr ? "phone-error" : ""}`}
+          />
         </div>
-        <PhoneInput
-          defaultCountry="SA"
-          international
-          countryCallingCodeEditable={false}
-          labels={ar}
-          value={data.phone as PhoneValue}
-          onChange={v => {
-            const val = v ?? "";
-            onChange("phone", val);
-            if (!val) setPhoneErr("رقم الجوال مطلوب");
-            else if (!isValidPhoneNumber(val)) setPhoneErr("رقم غير صحيح");
-            else setPhoneErr("");
-          }}
-          onBlur={() => {
-            if (!data.phone) setPhoneErr("رقم الجوال مطلوب");
-            else if (!isValidPhoneNumber(data.phone)) setPhoneErr("رقم غير صحيح");
-          }}
-          countrySelectComponent={CustomCountrySelect}
-          numberInputProps={{ placeholder: "5XXXXXXXX", inputMode: "numeric" }}
-          className={`custom-phone-input ${displayPhoneErr ? "phone-error" : ""}`}
-        />
-      </div>
+      ) : (
+        // ضيف — كل الحقول
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="الاسم الأول" value={data.firstName} error={errors.firstName}
+              placeholder="أدخل اسمك الأول"
+              onChange={v => onChange("firstName", v.replace(/[^a-zA-Z\u0600-\u06FF\s]/g, ""))} />
+            <Field label="الاسم الأخير" value={data.lastName} error={errors.lastName}
+              placeholder="أدخل اسمك الأخير"
+              onChange={v => onChange("lastName", v.replace(/[^a-zA-Z\u0600-\u06FF\s]/g, ""))} />
+          </div>
+          <Field label="البريد الإلكتروني (اختياري)" value={data.email}
+            placeholder="example@mail.com" dir="ltr" inputMode="email"
+            onChange={v => onChange("email", v)} />
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center justify-between">
+              <label className="text-xs sm:text-sm font-semibold text-gray-600">رقم الجوال</label>
+              {displayPhoneErr && <PhoneErrBadge msg={displayPhoneErr} />}
+            </div>
+            <PhoneInput
+              defaultCountry="SA" international countryCallingCodeEditable={false} labels={ar}
+              value={data.phone as PhoneValue}
+              onChange={v => { const val = v ?? ""; onChange("phone", val); if (!val) setPhoneErr("رقم الجوال مطلوب"); else if (!isValidPhoneNumber(val)) setPhoneErr("رقم غير صحيح"); else setPhoneErr(""); }}
+              onBlur={() => { if (!data.phone) setPhoneErr("رقم الجوال مطلوب"); else if (!isValidPhoneNumber(data.phone)) setPhoneErr("رقم غير صحيح"); }}
+              countrySelectComponent={CustomCountrySelect}
+              numberInputProps={{ placeholder: "5XXXXXXXX", inputMode: "numeric" }}
+              className={`custom-phone-input ${displayPhoneErr ? "phone-error" : ""}`}
+            />
+          </div>
+        </>
+      )}
 
       <button
         onClick={onConfirm}
@@ -222,6 +277,15 @@ export default function CustomerSection({ data, errors, confirmed, onChange, onC
         تأكيد
       </button>
     </div>
+  );
+}
+
+function PhoneErrBadge({ msg }: { msg: string }) {
+  return (
+    <span className="flex items-center gap-1 text-[11px] font-medium text-red-500 bg-red-50 border border-red-200 rounded px-1.5 py-0.5">
+      <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+      {msg}
+    </span>
   );
 }
 

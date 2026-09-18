@@ -2,6 +2,7 @@ import { TrendingUp } from "lucide-react";
 import type { Product } from "./products/types";
 import ProductCard from "./products/ProductCard";
 
+// الـ IDs المطلوبة — تُرسل كـ query واحدة بدل 4 requests منفصلة
 const IDS = [
   "6a943492832465e62427be05",
   "6a9437e6cd7da0bf04e86916",
@@ -11,19 +12,17 @@ const IDS = [
 
 const BACKEND = process.env.BACKEND_URL || "https://lamsa-simicard-backend-production.up.railway.app";
 
+// Fix 7: request واحدة بدل 4 — /api/products/by-ids?ids=id1,id2,id3,id4
 async function getMostDemanded(): Promise<Product[]> {
   try {
-    const results = await Promise.all(
-      IDS.map((id) =>
-        fetch(`${BACKEND}/api/products/${id}`, {
-          next: { revalidate: 300 },
-          signal: AbortSignal.timeout(3000),
-        })
-          .then((r) => (r.ok ? r.json() : null))
-          .catch(() => null)
-      )
-    );
-    return results.filter(Boolean) as Product[];
+    const idsParam = IDS.join(",");
+    const res = await fetch(`${BACKEND}/api/products/by-ids?ids=${idsParam}`, {
+      next: { revalidate: 300 },
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
   } catch {
     return [];
   }

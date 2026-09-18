@@ -1,14 +1,10 @@
 import HeroSection from "./components/HeroSection";
 import MostDemandedSection from "./components/MostDemandedSection";
 import HomeCategorySections from "./components/HomeCategorySections";
-import DeliveryBanner from "./components/DeliveryBanner";
-import StaticCategories from "./components/StaticCategories";
 import CustomerReviews from "./components/CustomerReviews";
-import AnimatedBackground from "./components/AnimatedBackground";
-import TelecomPartnersSection from "./components/TelecomPartnersSection";
 
 const BACKEND = process.env.BACKEND_URL || "http://localhost:5000";
-const SITE_URL = "https://basmathatify.com";
+const SITE_URL = "https://www.lamsa-smartt.com";
 
 async function getCompany() {
   try {
@@ -33,7 +29,7 @@ export default async function Home() {
     "@context": "https://schema.org",
     "@type": "Organization",
     name: siteName,
-    alternateName: c.nameEn || "basmathatify",
+    alternateName: c.nameEn || "lamsa-simicard",
     url: SITE_URL,
     logo: logoUrl,
     contactPoint: [
@@ -86,13 +82,10 @@ export default async function Home() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(webSiteJsonLd) }}
       />
-      <AnimatedBackground />
       <main className="min-h-screen">
         <HeroSection />
-        {/* <TelecomPartnersSection /> */}
         <MostDemandedSection />
         <HomeCategorySections />
-        {/* <DeliveryBanner /> */}
         <CustomerReviews />
       </main>
     </>

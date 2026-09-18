@@ -1,9 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Cairo } from "next/font/google";
-import { headers } from "next/headers";
 import TikTokPixel from "./components/TikTokPixel";
 import "./globals.css";
-import "leaflet/dist/leaflet.css";
+// leaflet/dist/leaflet.css نُقل إلى checkout/layout.tsx — لا علاقة له بباقي الصفحات
 import ClientLayout from "./components/ClientLayout";
 import Footer from "./components/Footer";
 
@@ -110,14 +109,13 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  const nonce = (await headers()).get("x-nonce") ?? undefined;
   return (
     <html lang="ar" dir="rtl">
       <head>
-        <TikTokPixel nonce={nonce} />
+        <TikTokPixel />
       </head>
       <body className={`${cairo.className} antialiased`} suppressHydrationWarning>
-        <ClientLayout footer={<Footer />} nonce={nonce}>{children}</ClientLayout>
+        <ClientLayout footer={<Footer />}>{children}</ClientLayout>
       </body>
     </html>
   );

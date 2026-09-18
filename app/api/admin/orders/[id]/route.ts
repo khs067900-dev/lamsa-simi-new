@@ -8,7 +8,7 @@ async function safeJson(res: Response) {
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const res = await fetch(`${getBackend()}/api/checkout/${id}`, forwardCookies(req, {}));
+  const res = await fetch(`${getBackend()}/api/admin/orders/${id}`, forwardCookies(req, {}));
   return NextResponse.json(await safeJson(res), { status: res.status });
 }
 
@@ -16,7 +16,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params;
   const body = await req.json();
   const endpoint = body.financials ? "financials" : "status";
-  const res = await fetch(`${getBackend()}/api/checkout/${id}/${endpoint}`,
+  const res = await fetch(`${getBackend()}/api/admin/orders/${id}/${endpoint}`,
     forwardCookies(req, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -28,7 +28,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const res = await fetch(`${getBackend()}/api/checkout/${id}`,
+  const res = await fetch(`${getBackend()}/api/admin/orders/${id}`,
     forwardCookies(req, { method: "DELETE" })
   );
   return NextResponse.json(await safeJson(res), { status: res.status });

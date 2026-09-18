@@ -134,7 +134,6 @@ export default function OrderDetailPage() {
 
       {/* ── ٣. المنتجات ── */}
       <Section icon={<IconBag />} iconBg="bg-orange-500" title="المنتجات">
-        {/* موبايل */}
         <div className="sm:hidden space-y-2">
           {order.items.map((item, i) => (
             <div key={i} className="bg-gray-50 rounded-lg p-3 flex justify-between items-start gap-2">
@@ -150,7 +149,6 @@ export default function OrderDetailPage() {
             <span className="font-bold text-purple-700">{order.total.toFixed(2)} ر.س</span>
           </div>
         </div>
-        {/* ديسكتوب */}
         <div className="hidden sm:block overflow-x-auto -mx-5 px-5">
           <table className="w-full text-sm text-right">
             <thead>
@@ -230,7 +228,19 @@ export default function OrderDetailPage() {
             حفظ الأرقام
           </button>
           <div className="flex gap-2">
-            {(["pending", "confirmed"] as const).map((s) => (
+            {(["pending", "confirmed", "processing", "ready_to_ship", "shipped", "out_for_delivery", "delivered"] as const).filter((s) => {
+              const transitions: Record<string, string[]> = {
+                pending: ["confirmed"],
+                confirmed: ["processing"],
+                processing: ["ready_to_ship"],
+                ready_to_ship: ["shipped"],
+                shipped: ["out_for_delivery"],
+                out_for_delivery: ["delivered"],
+                delivered: [],
+                cancelled: ["pending"],
+              };
+              return s === order.status || transitions[order.status]?.includes(s);
+            }).map((s) => (
               <button
                 key={s}
                 onClick={() => changeStatus(s)}
@@ -302,6 +312,7 @@ export default function OrderDetailPage() {
           </div>
         </Section>
       )}
+
       {/* زرار الطباعة */}
       <div className="pb-6 flex justify-center">
         <button
@@ -311,8 +322,6 @@ export default function OrderDetailPage() {
           🖨️ طباعة
         </button>
       </div>
-
-
     </div>
   );
 }

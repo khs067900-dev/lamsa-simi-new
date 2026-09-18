@@ -30,7 +30,7 @@ export default function OrdersPage() {
 
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"" | "pending" | "confirmed" | "cancelled">("");
+  const [statusFilter, setStatusFilter] = useState<"" | "pending" | "confirmed" | "processing" | "ready_to_ship" | "shipped" | "out_for_delivery" | "delivered" | "cancelled">("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
@@ -231,6 +231,11 @@ export default function OrdersPage() {
               <option value="">كل الحالات</option>
               <option value="pending">قيد الانتظار</option>
               <option value="confirmed">مؤكد</option>
+              <option value="processing">جاري التجهيز</option>
+              <option value="ready_to_ship">جاهز للشحن</option>
+              <option value="shipped">تم الشحن</option>
+              <option value="out_for_delivery">خرج للتسليم</option>
+              <option value="delivered">تم التسليم</option>
               <option value="cancelled">ملغي</option>
             </select>
           </div>
