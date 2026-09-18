@@ -862,7 +862,7 @@ function LoginForm({ onSuccess }: { onSuccess: (user: object) => void }) {
           <button
             type="button"
             onClick={() => { setStep("forgot-email"); setForgotEmail(email); }}
-            className="text-xs text-[#B5854A] hover:text-[#9a6d38] transition-colors font-medium"
+            className="hidden text-xs text-[#B5854A] hover:text-[#9a6d38] transition-colors font-medium"
           >
             نسيت كلمة السر؟
           </button>
