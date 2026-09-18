@@ -140,11 +140,12 @@ function OrderCard({ order }: { order: Order }) {
         <span className="text-[11px] text-[#b0b5be]">{fmtDate(order.createdAt)}</span>
       </div>
 
-      {/* الحالة */}
-      <div className="px-4 pb-4">
+      {/* الحالة + زرار عرض التفاصيل */}
+      <div className="flex items-center justify-between gap-2 px-4 pb-4">
         <span className={`inline-flex items-center text-[11px] font-semibold px-2.5 py-1 rounded-full border ${st.badge}`}>
           {STATUS_LABEL[order.status]}
         </span>
+        <span className="text-[11px] font-semibold text-[#0A1C29] underline underline-offset-2">عرض التفاصيل</span>
       </div>
     </Link>
   );
