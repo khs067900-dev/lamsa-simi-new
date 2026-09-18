@@ -325,8 +325,16 @@ export default function VerifyPage() {
               <p className="text-[11px] sm:text-xs text-red-600/80 font-medium mt-3 leading-relaxed text-right">
                 إذا تم خصم المبلغ الموضّح، فهذا يعني أن طلبك تم تأكيده بنجاح، ويمكنك إغلاق هذه الصفحة بأمان.{" "}
                 <button
-                  onClick={async () => {
-                    if (data) await handleSuccess(data);
+                  onClick={() => {
+                    if (data) {
+                      savePendingOrder(data);
+                      claimOrders();
+                      clear();
+                      sessionStorage.removeItem("verify_data");
+                      sessionStorage.removeItem(`verify_attempts_${data.orderId}`);
+                    }
+                    setRedirecting(true);
+                    setTimeout(() => router.replace("/"), 800);
                   }}
                   className="font-black text-[#1A2E44] underline underline-offset-2 border-b border-dashed border-[#1A2E44]"
                 >
